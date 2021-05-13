@@ -108,6 +108,7 @@ public class LongAdder extends Striped64 implements Serializable {
                 (a = as[getProbe() & m]) == null ||
                 // 当前位置的 cell 中的 value 值以 cas 方式更新值失败
                 !(uncontended = a.cas(v = a.value, v + x)))
+
                 longAccumulate(x, null, uncontended);
         }
     }

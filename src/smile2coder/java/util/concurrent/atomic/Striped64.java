@@ -157,6 +157,7 @@ abstract class Striped64 extends Number {
 
     /**
      * Spinlock (locked via CAS) used when resizing and/or creating Cells.
+     * 0为锁空闲，1为锁占用
      */
     transient volatile int cellsBusy;
 
@@ -224,14 +225,18 @@ abstract class Striped64 extends Number {
         boolean collide = false;                // True if last slot nonempty
         for (;;) {
             Cell[] as; Cell a; int n; long v;
+            // 情况1：cells已经初始化完成
             if ((as = cells) != null && (n = as.length) > 0) {
+                // 确认数组对应位置，如果当前位置为 null，则新建 Cell 对象
                 if ((a = as[(n - 1) & h]) == null) {
                     if (cellsBusy == 0) {       // Try to attach new Cell
                         Cell r = new Cell(x);   // Optimistically create
+                        // 尝试获取锁
                         if (cellsBusy == 0 && casCellsBusy()) {
                             boolean created = false;
                             try {               // Recheck under lock
                                 Cell[] rs; int m, j;
+                                // 再次检查
                                 if ((rs = cells) != null &&
                                     (m = rs.length) > 0 &&
                                     rs[j = (m - 1) & h] == null) {
@@ -243,20 +248,26 @@ abstract class Striped64 extends Number {
                             }
                             if (created)
                                 break;
+                            // 没有创建成功，重试
                             continue;           // Slot is now non-empty
                         }
                     }
                     collide = false;
                 }
+                // cas 更新 base 值失败了
                 else if (!wasUncontended)       // CAS already known to fail
+                    // 后面会重新计算 h 的值，再次计算位置
                     wasUncontended = true;      // Continue after rehash
+                // 说明 a 的值不为 null，cas的方式替换 cell 中的 value值
                 else if (a.cas(v = a.value, ((fn == null) ? v + x :
                                              fn.applyAsLong(v, x))))
                     break;
+                // cells 到达最大长度，或者已经扩容完成
                 else if (n >= NCPU || cells != as)
                     collide = false;            // At max size or stale
                 else if (!collide)
                     collide = true;
+                // 扩容 cells 数组
                 else if (cellsBusy == 0 && casCellsBusy()) {
                     try {
                         if (cells == as) {      // Expand table unless stale
@@ -271,11 +282,15 @@ abstract class Striped64 extends Number {
                     collide = false;
                     continue;                   // Retry with expanded table
                 }
+                // 重新计算 hash 的值
                 h = advanceProbe(h);
             }
+            // 情况2：cells没有初始化，尝试获取cellsBusy锁，然后初始化cells
             else if (cellsBusy == 0 && cells == as && casCellsBusy()) {
+                // 只有一个线程会进入这里
                 boolean init = false;
                 try {                           // Initialize table
+                    // 问题：什么情况会出现 cells != as 的情况？
                     if (cells == as) {
                         Cell[] rs = new Cell[2];
                         rs[h & 1] = new Cell(x);
@@ -288,6 +303,7 @@ abstract class Striped64 extends Number {
                 if (init)
                     break;
             }
+            // 情况3：cells没有初始化，并且没有获取锁（说明其它线程正在初始化cells），则尝试cas方式更新base值，如果更新成功，跳出循环
             else if (casBase(v = base, ((fn == null) ? v + x :
                                         fn.applyAsLong(v, x))))
                 break;                          // Fall back on using base
