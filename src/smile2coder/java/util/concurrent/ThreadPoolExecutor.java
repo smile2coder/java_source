@@ -615,6 +615,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
          * @param firstTask the first task (null if none)
          */
         Worker(Runnable firstTask) {
+            // 线程启动前不允许中断？？？
             setState(-1); // inhibit interrupts until runWorker
             this.firstTask = firstTask;
             this.thread = getThreadFactory().newThread(this);
@@ -1364,19 +1365,31 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
          * and so reject the task.
          */
         int c = ctl.get();
+        // 如果当前线程数小于核心线程数
         if (workerCountOf(c) < corePoolSize) {
+            // 尝试新增线程执行任务
             if (addWorker(command, true))
                 return;
+            // 新增失败，重新获取ctl
             c = ctl.get();
         }
+        // 检查线程池状态是否在运行中，在运行中则尝试将任务放入队列
         if (isRunning(c) && workQueue.offer(command)) {
             int recheck = ctl.get();
+            // 重新检查线程池状态是否在运行中，因为在插入队列的过程中线程池的状态可能发生改变
+            // 如果线程池不在运行中，则表示线程池不再接受新的任务，需要将队列中新增的任务删除
+            // 问题：如果在删除任务前，已经有线程执行了任务，则流程结束了
             if (! isRunning(recheck) && remove(command))
+                // 走到这，说明线程池不在运行中，且成功从队列中删除任务，执行拒绝策略
                 reject(command);
+            // 线程池在运行中，但是线程数为0，这时要新增一个线程执行任务
+            // 什么情况下会出现这种情况？核心线程到达过期时间被中断，此时线程池中没有线程
             else if (workerCountOf(recheck) == 0)
                 addWorker(null, false);
         }
+        // 尝试新增非核心线程
         else if (!addWorker(command, false))
+            // 新增非核心线程失败，执行拒绝策略
             reject(command);
     }
 
