@@ -41,8 +41,6 @@ import smile2coder.java.util.concurrent.locks.Condition;
 
 import java.util.*;
 
-import static java.util.concurrent.TimeUnit.NANOSECONDS;
-
 /**
  * A {@link ThreadPoolExecutor} that can additionally schedule
  * commands to run after a given delay, or to execute
@@ -236,7 +234,7 @@ public class ScheduledThreadPoolExecutor
         }
 
         public long getDelay(TimeUnit unit) {
-            return unit.convert(time - now(), NANOSECONDS);
+            return unit.convert(time - now(), TimeUnit.NANOSECONDS);
         }
 
         public int compareTo(Delayed other) {
@@ -254,7 +252,7 @@ public class ScheduledThreadPoolExecutor
                 else
                     return 1;
             }
-            long diff = getDelay(NANOSECONDS) - other.getDelay(NANOSECONDS);
+            long diff = getDelay(TimeUnit.NANOSECONDS) - other.getDelay(TimeUnit.NANOSECONDS);
             return (diff < 0) ? -1 : (diff > 0) ? 1 : 0;
         }
 
@@ -430,7 +428,7 @@ public class ScheduledThreadPoolExecutor
      * @throws IllegalArgumentException if {@code corePoolSize < 0}
      */
     public ScheduledThreadPoolExecutor(int corePoolSize) {
-        super(corePoolSize, Integer.MAX_VALUE, 0, NANOSECONDS,
+        super(corePoolSize, Integer.MAX_VALUE, 0, TimeUnit.NANOSECONDS,
               new DelayedWorkQueue());
     }
 
@@ -447,7 +445,7 @@ public class ScheduledThreadPoolExecutor
      */
     public ScheduledThreadPoolExecutor(int corePoolSize,
                                        ThreadFactory threadFactory) {
-        super(corePoolSize, Integer.MAX_VALUE, 0, NANOSECONDS,
+        super(corePoolSize, Integer.MAX_VALUE, 0, TimeUnit.NANOSECONDS,
               new DelayedWorkQueue(), threadFactory);
     }
 
@@ -464,7 +462,7 @@ public class ScheduledThreadPoolExecutor
      */
     public ScheduledThreadPoolExecutor(int corePoolSize,
                                        RejectedExecutionHandler handler) {
-        super(corePoolSize, Integer.MAX_VALUE, 0, NANOSECONDS,
+        super(corePoolSize, Integer.MAX_VALUE, 0, TimeUnit.NANOSECONDS,
               new DelayedWorkQueue(), handler);
     }
 
@@ -485,7 +483,7 @@ public class ScheduledThreadPoolExecutor
     public ScheduledThreadPoolExecutor(int corePoolSize,
                                        ThreadFactory threadFactory,
                                        RejectedExecutionHandler handler) {
-        super(corePoolSize, Integer.MAX_VALUE, 0, NANOSECONDS,
+        super(corePoolSize, Integer.MAX_VALUE, 0, TimeUnit.NANOSECONDS,
               new DelayedWorkQueue(), threadFactory, handler);
     }
 
@@ -514,7 +512,7 @@ public class ScheduledThreadPoolExecutor
     private long overflowFree(long delay) {
         Delayed head = (Delayed) super.getQueue().peek();
         if (head != null) {
-            long headDelay = head.getDelay(NANOSECONDS);
+            long headDelay = head.getDelay(TimeUnit.NANOSECONDS);
             if (headDelay < 0 && (delay - headDelay < 0))
                 delay = Long.MAX_VALUE + headDelay;
         }
@@ -622,7 +620,7 @@ public class ScheduledThreadPoolExecutor
      * @throws NullPointerException {@inheritDoc}
      */
     public void execute(Runnable command) {
-        schedule(command, 0, NANOSECONDS);
+        schedule(command, 0, TimeUnit.NANOSECONDS);
     }
 
     // Override AbstractExecutorService methods
@@ -632,7 +630,7 @@ public class ScheduledThreadPoolExecutor
      * @throws NullPointerException       {@inheritDoc}
      */
     public Future<?> submit(Runnable task) {
-        return schedule(task, 0, NANOSECONDS);
+        return schedule(task, 0, TimeUnit.NANOSECONDS);
     }
 
     /**
@@ -640,7 +638,7 @@ public class ScheduledThreadPoolExecutor
      * @throws NullPointerException       {@inheritDoc}
      */
     public <T> Future<T> submit(Runnable task, T result) {
-        return schedule(Executors.callable(task, result), 0, NANOSECONDS);
+        return schedule(Executors.callable(task, result), 0, TimeUnit.NANOSECONDS);
     }
 
     /**
@@ -648,7 +646,7 @@ public class ScheduledThreadPoolExecutor
      * @throws NullPointerException       {@inheritDoc}
      */
     public <T> Future<T> submit(Callable<T> task) {
-        return schedule(task, 0, NANOSECONDS);
+        return schedule(task, 0, TimeUnit.NANOSECONDS);
     }
 
     /**
@@ -1065,7 +1063,7 @@ public class ScheduledThreadPoolExecutor
             lock.lock();
             try {
                 RunnableScheduledFuture<?> first = queue[0];
-                if (first == null || first.getDelay(NANOSECONDS) > 0)
+                if (first == null || first.getDelay(TimeUnit.NANOSECONDS) > 0)
                     return null;
                 else
                     return finishPoll(first);
@@ -1083,7 +1081,7 @@ public class ScheduledThreadPoolExecutor
                     if (first == null)
                         available.await();
                     else {
-                        long delay = first.getDelay(NANOSECONDS);
+                        long delay = first.getDelay(TimeUnit.NANOSECONDS);
                         if (delay <= 0)
                             return finishPoll(first);
                         first = null; // don't retain ref while waiting
@@ -1122,7 +1120,7 @@ public class ScheduledThreadPoolExecutor
                         else
                             nanos = available.awaitNanos(nanos);
                     } else {
-                        long delay = first.getDelay(NANOSECONDS);
+                        long delay = first.getDelay(TimeUnit.NANOSECONDS);
                         if (delay <= 0)
                             return finishPoll(first);
                         if (nanos <= 0)
@@ -1174,7 +1172,7 @@ public class ScheduledThreadPoolExecutor
         private RunnableScheduledFuture<?> peekExpired() {
             // assert lock.isHeldByCurrentThread();
             RunnableScheduledFuture<?> first = queue[0];
-            return (first == null || first.getDelay(NANOSECONDS) > 0) ?
+            return (first == null || first.getDelay(TimeUnit.NANOSECONDS) > 0) ?
                 null : first;
         }
 

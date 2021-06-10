@@ -40,8 +40,6 @@ import smile2coder.java.util.concurrent.locks.Condition;
 
 import java.util.*;
 
-import static java.util.concurrent.TimeUnit.NANOSECONDS;
-
 /**
  * An unbounded {@linkplain BlockingQueue blocking queue} of
  * {@code Delayed} elements, in which an element can only be taken
@@ -188,7 +186,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
         lock.lock();
         try {
             E first = q.peek();
-            if (first == null || first.getDelay(NANOSECONDS) > 0)
+            if (first == null || first.getDelay(TimeUnit.NANOSECONDS) > 0)
                 return null;
             else
                 return q.poll();
@@ -213,7 +211,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
                 if (first == null)
                     available.await();
                 else {
-                    long delay = first.getDelay(NANOSECONDS);
+                    long delay = first.getDelay(TimeUnit.NANOSECONDS);
                     if (delay <= 0)
                         return q.poll();
                     first = null; // don't retain ref while waiting
@@ -261,7 +259,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
                     else
                         nanos = available.awaitNanos(nanos);
                 } else {
-                    long delay = first.getDelay(NANOSECONDS);
+                    long delay = first.getDelay(TimeUnit.NANOSECONDS);
                     if (delay <= 0)
                         return q.poll();
                     if (nanos <= 0)
@@ -326,7 +324,7 @@ public class DelayQueue<E extends Delayed> extends AbstractQueue<E>
     private E peekExpired() {
         // assert lock.isHeldByCurrentThread();
         E first = q.peek();
-        return (first == null || first.getDelay(NANOSECONDS) > 0) ?
+        return (first == null || first.getDelay(TimeUnit.NANOSECONDS) > 0) ?
             null : first;
     }
 
