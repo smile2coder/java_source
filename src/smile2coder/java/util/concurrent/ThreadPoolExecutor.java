@@ -615,7 +615,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
          * @param firstTask the first task (null if none)
          */
         Worker(Runnable firstTask) {
-            // TODO 线程启动前不允许中断？？？
+            // 线程启动前不需要中断，interruptIfStarted()方法会中断线程
             setState(-1); // inhibit interrupts until runWorker
             this.firstTask = firstTask;
             this.thread = getThreadFactory().newThread(this);
@@ -657,6 +657,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
 
         void interruptIfStarted() {
             Thread t;
+            // 线程已经启动 && 线程不为空 && 线程没有被中断
             if (getState() >= 0 && (t = thread) != null && !t.isInterrupted()) {
                 try {
                     t.interrupt();
@@ -794,6 +795,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         try {
             for (Worker w : workers) {
                 Thread t = w.thread;
+                // 注意这里的 w.tryLock(), 返回 false 代表该线程不是空闲状态
                 if (!t.isInterrupted() && w.tryLock()) {
                     try {
                         t.interrupt();
@@ -802,6 +804,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                         w.unlock();
                     }
                 }
+                // 是否只至多中断一个线程
                 if (onlyOne)
                     break;
             }
@@ -1024,9 +1027,11 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      * @param completedAbruptly if the worker died due to user exception
      */
     private void processWorkerExit(Worker w, boolean completedAbruptly) {
+        // 如果是用户线程异常导致线程死亡，则调整线程数量
         if (completedAbruptly) // If abrupt, then workerCount wasn't adjusted
             decrementWorkerCount();
 
+        // 调整线程
         final ReentrantLock mainLock = this.mainLock;
         mainLock.lock();
         try {
@@ -1035,7 +1040,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         } finally {
             mainLock.unlock();
         }
-
+        // 尝试终止，尝试调整线程池状态
         tryTerminate();
 
         int c = ctl.get();
@@ -1047,6 +1052,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                 if (workerCountOf(c) >= min)
                     return; // replacement not needed
             }
+            // 如果线程池已经STOP，但是线程数量小于最小数量，则新增一个线程
             addWorker(null, false);
         }
     }
@@ -1087,23 +1093,29 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
             int wc = workerCountOf(c);
 
             // Are workers subject to culling?
+            // 判断是否有线程要被中断
             boolean timed = allowCoreThreadTimeOut || wc > corePoolSize;
 
             if ((wc > maximumPoolSize || (timed && timedOut))
                 && (wc > 1 || workQueue.isEmpty())) {
                 if (compareAndDecrementWorkerCount(c))
                     return null;
+                // cas失败重新尝试
                 continue;
             }
 
             try {
+                // 根据 timed 确定获取任务的方式
                 Runnable r = timed ?
                     workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) :
                     workQueue.take();
                 if (r != null)
+                    // 执行到这里，说明 timed 为 false，得到任务
                     return r;
+                // 到这里说明 timed 为 true，并且没有获取到任务，是超时返回的
                 timedOut = true;
             } catch (InterruptedException retry) {
+                // 中断返回
                 timedOut = false;
             }
         }
@@ -1162,20 +1174,24 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         try {
             // 获取任务
             while (task != null || (task = getTask()) != null) {
+                // 加锁
                 w.lock();
                 // If pool is stopping, ensure thread is interrupted;
                 // if not, ensure thread is not interrupted.  This
                 // requires a recheck in second case to deal with
                 // shutdownNow race while clearing interrupt
+                // 如果线程池已经 STOP，确保线程中断
                 if ((runStateAtLeast(ctl.get(), STOP) ||
                      (Thread.interrupted() &&
                       runStateAtLeast(ctl.get(), STOP))) &&
                     !wt.isInterrupted())
                     wt.interrupt();
                 try {
+                    // 勾子
                     beforeExecute(wt, task);
                     Throwable thrown = null;
                     try {
+                        // 执行任务
                         task.run();
                     } catch (RuntimeException x) {
                         thrown = x; throw x;
@@ -1184,11 +1200,14 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
                     } catch (Throwable x) {
                         thrown = x; throw new Error(x);
                     } finally {
+                        // 勾子
                         afterExecute(task, thrown);
                     }
                 } finally {
                     task = null;
+                    // 任务数统计
                     w.completedTasks++;
+                    // 解锁
                     w.unlock();
                 }
             }
@@ -1434,15 +1453,21 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
      */
     public void shutdown() {
         final ReentrantLock mainLock = this.mainLock;
+        // 上锁
         mainLock.lock();
         try {
             checkShutdownAccess();
+            // 修改状态为 SHUTDOWN
             advanceRunState(SHUTDOWN);
+            // 中断所有空闲线程
             interruptIdleWorkers();
+            // 勾子
             onShutdown(); // hook for ScheduledThreadPoolExecutor
         } finally {
+            // 解锁
             mainLock.unlock();
         }
+        // 尝试调用 terminate 方法
         tryTerminate();
     }
 
@@ -1469,8 +1494,11 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         mainLock.lock();
         try {
             checkShutdownAccess();
+            // 修改状态为 STOP
             advanceRunState(STOP);
+            // 中断所有线程
             interruptWorkers();
+            // 返回所有未执行的任务
             tasks = drainQueue();
         } finally {
             mainLock.unlock();
@@ -1503,6 +1531,13 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
         return runStateAtLeast(ctl.get(), TERMINATED);
     }
 
+    /**
+     * 等待线程池到达 TERMINATED 状态， 一直到成功或者超时
+     * @param timeout the maximum time to wait
+     * @param unit the time unit of the timeout argument
+     * @return
+     * @throws InterruptedException
+     */
     public boolean awaitTermination(long timeout, TimeUnit unit)
         throws InterruptedException {
         long nanos = unit.toNanos(timeout);
@@ -1623,6 +1658,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
+     * 启动一个核心线程
      * Starts a core thread, causing it to idly wait for work. This
      * overrides the default policy of starting core threads only when
      * new tasks are executed. This method will return {@code false}
@@ -1648,6 +1684,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
     }
 
     /**
+     * 启动所有核心线程
      * Starts all core threads, causing them to idly wait for work. This
      * overrides the default policy of starting core threads only when
      * new tasks are executed.
@@ -2077,6 +2114,7 @@ public class ThreadPoolExecutor extends AbstractExecutorService {
          */
         public void rejectedExecution(Runnable r, ThreadPoolExecutor e) {
             if (!e.isShutdown()) {
+                // 没有起线程，调用线程直接执行
                 r.run();
             }
         }

@@ -109,6 +109,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
 
     /**
      * Returns result or throws exception for completed task.
+     * 只有状态为 NORMAL 时，才能正确返回，否则返回异常
      *
      * @param s completed state value
      */
@@ -133,6 +134,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
         if (callable == null)
             throw new NullPointerException();
         this.callable = callable;
+        // 设置初始状态
         this.state = NEW;       // ensure visibility of callable
     }
 
@@ -187,6 +189,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
      */
     public V get() throws InterruptedException, ExecutionException {
         int s = state;
+        // 如果是正在进行中
         if (s <= COMPLETING)
             s = awaitDone(false, 0L);
         return report(s);
@@ -227,6 +230,7 @@ public class FutureTask<V> implements RunnableFuture<V> {
      * @param v the value
      */
     protected void set(V v) {
+        // 修改 Future 的状态为完成
         if (UNSAFE.compareAndSwapInt(this, stateOffset, NEW, COMPLETING)) {
             outcome = v;
             UNSAFE.putOrderedInt(this, stateOffset, NORMAL); // final state
